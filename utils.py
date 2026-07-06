@@ -88,8 +88,8 @@ def clip_torques_in_groups(torques):
 
     # Iterate over the array in groups of 3
     for i in range(0, len(torques), 3):  # Step by 3 to handle each group
-        torques_copy[i] = np.clip(torques_copy[i], -23.0, 23.0)         # First element in group
-        torques_copy[i + 1] = np.clip(torques_copy[i + 1], -23.0, 23.0)   # Second element in group
-        torques_copy[i + 2] = np.clip(torques_copy[i + 2], -45.0, 45.0)   # Third element in group
+        torques_copy[i] = np.clip(torques_copy[i], -25.0, 25.0)         # First element in group
+        torques_copy[i + 1] = np.clip(torques_copy[i + 1], -25.0, 25.0)   # Second element in group
+        torques_copy[i + 2] = np.clip(torques_copy[i + 2], -25.0, 25.0)   # Third element in group
 
     return torques_copy

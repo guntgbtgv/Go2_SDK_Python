@@ -16,15 +16,15 @@ import unitree_legged_const as go2w
 from unitree_sdk2py.go2.sport.sport_client import SportClient
 from unitree_sdk2py.comm.motion_switcher.motion_switcher_client import MotionSwitcherClient
 
-from utils import scale_axis, quat_rotate_inverse
-from config_loader.config_loader import load_config, load_actor_network
+from utils import scale_axis, quat_rotate_inverse, clip_torques_in_groups
+from config_loader.config_loader import load_config, load_actor_network, Agent
 
 
 # ---------------- Constants ----------------
 JOYSTICK_THRESHOLD = 0.05
 CONTROL_INTERVAL = 0.02  # 50 Hz
 DEFAULT_KP = 25.0
-DEFAULT_KD = 0.5
+DEFAULT_KD = 2.0
 
 # ---------------- Joystick Handler ----------------
 class JoystickHandler:
@@ -86,24 +86,19 @@ class Policy:
         self.gait = policy_cfg.get('gait', 'trot')  # 'trot' or 'pronk'
 
         # model path resolution: prefer explicit mapping in config, fall back to defaults
-        model_paths = policy_cfg.get('model_paths', {})
-        default_paths = {'trot': 'nn/trot_gunoo.pt', 'pronk': 'nn/pronk_gunoo_2.pt'}
-        model_path = model_paths.get(self.gait, policy_cfg.get('model_path', default_paths.get(self.gait)))
+        # model_paths = policy_cfg.get('model_paths', {})
+        # default_paths = {'trot': 'nn/trot_gunoo.pt', 'pronk': 'nn/pronk_gunoo_2.pt'}
+        # model_path = model_paths.get(self.gait, policy_cfg.get('model_path', default_paths.get(self.gait)))
 
-        self.actor_network = load_actor_network(config, model_path=model_path).to('cpu')
+        # self.actor_network = load_actor_network(config).to('cpu')
+        self.actor = Agent(observation_space=45, action_apace=12).to('cpu')
+        self.actor.load_state_dict(torch.load("nn/model_2026-07-02_15-22-23.pt", map_location=torch.device("cpu")))
+        self.actor.eval()
         self.joystick = joystick
         self.last_action = np.zeros(12)
 
         # Timing parameters
         self.timestep = 0.0
-        # period can be configured per gait in config, otherwise use sensible defaults
-        periods = policy_cfg.get('periods', {})
-        default_periods = {'trot': 0.5, 'pronk': 0.4}
-        self.period = periods.get(self.gait, default_periods.get(self.gait, 0.5))
-        self.phase_FL = np.zeros(1)
-        self.phase_FR = np.zeros(1)
-        self.phase_HL = np.zeros(1)
-        self.phase_HR = np.zeros(1)
 
 
     def compute_observation(self, state: LowState_):
@@ -123,33 +118,16 @@ class Policy:
             torch.tensor([[0.0, 0.0, -1.0]], dtype=torch.float32)
         ).squeeze().numpy()
 
-        # phase assignment depending on selected gait
-        if self.gait == 'pronk':
-            # All legs in phase
-            self.phase_FL[0] = (self.timestep) % self.period / self.period
-            self.phase_FR[0] = self.phase_FL[0]
-            self.phase_HL[0] = self.phase_FL[0]
-            self.phase_HR[0] = self.phase_FL[0]
-        else:
-            # default to trot: diagonal legs out of phase by 0.5
-            self.phase_FL[0] = (self.timestep) % self.period / self.period
-            self.phase_FR[0] = (self.phase_FL[0] + 0.5) % 1
-            self.phase_HL[0] = (self.phase_FL[0] + 0.5) % 1
-            self.phase_HR[0] = self.phase_FL[0]
 
         self.timestep += CONTROL_INTERVAL
 
         obs = np.concatenate((
             body_vel,
-            gravity_body,
             commands,
-            joint_angles - self.default_joint_angles,
+            gravity_body,
+            joint_angles,
             joint_velocities,
             self.last_action,
-            np.sin(2*np.pi*self.phase_FL),
-            np.sin(2*np.pi*self.phase_FR),
-            np.sin(2*np.pi*self.phase_HL),
-            np.sin(2*np.pi*self.phase_HR)
         ))
 
         obs = torch.tensor(obs, dtype=torch.float32).unsqueeze(0)
@@ -158,7 +136,11 @@ class Policy:
     def infer_action(self, state: LowState_):
         obs = self.compute_observation(state)
         with torch.no_grad():
-            actions = self.actor_network(obs).numpy()[0]
+            # actions = self.actor_network(obs).numpy()[0]
+            actions, _, _, _ = self.actor.get_action_and_value(
+                self.actor.obs_rms(obs, update=False),
+            )
+            actions = actions[0].numpy()
         self.last_action = actions.copy()
         return actions
 
@@ -281,14 +263,23 @@ class RobotController:
         # Policy control after standing up
         if self.percent_1 == 1 and self.percent_2 == 1 and self.percent_3 == 1 and self.sit_down == False and self.stand_up == False:
             actions = self.policy_module.infer_action(self.low_state)
-            des_pos = self.policy_module.default_joint_angles + 0.25 * actions
+            des_pos = self.policy_module.default_joint_angles + 0.5 * actions
+            tau = self.Kp*(des_pos - np.array([m.q for m in self.low_state.motor_state[:12]])) - self.Kd* np.array([m.dq for m in self.low_state.motor_state[:12]])
+            tau = clip_torques_in_groups(tau)  
+            # for i in range(12):
+            #     m = self.low_cmd.motor_cmd[i]
+            #     m.q = des_pos[i]
+            #     m.dq = 0
+            #     m.kp = self.Kp
+            #     m.kd = self.Kd
+            #     m.tau = 0
             for i in range(12):
                 m = self.low_cmd.motor_cmd[i]
-                m.q = des_pos[i]
+                m.q = 0
                 m.dq = 0
-                m.kp = self.Kp
-                m.kd = self.Kd
-                m.tau = 0
+                m.kp = 0
+                m.kd = 0
+                m.tau = tau
 
         self._sit_down_sequence()
 
