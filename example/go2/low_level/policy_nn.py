@@ -6,6 +6,7 @@ import math
 import numpy as np
 import torch
 import pygame
+# import onnxruntime as ort
 
 from unitree_sdk2py.core.channel import ChannelPublisher, ChannelFactoryInitialize, ChannelSubscriber
 from unitree_sdk2py.idl.unitree_go.msg.dds_ import LowCmd_, LowState_
@@ -90,6 +91,9 @@ class Policy:
         # default_paths = {'trot': 'nn/trot_gunoo.pt', 'pronk': 'nn/pronk_gunoo_2.pt'}
         # model_path = model_paths.get(self.gait, policy_cfg.get('model_path', default_paths.get(self.gait)))
 
+        # ort_sess = ort.InferenceSession("nn/2026-07-06_16-51-42.onnx")
+        # input_name = ort_sess.get_inputs()[0].name
+
         # self.actor_network = load_actor_network(config).to('cpu')
         self.actor = Agent(observation_space=45, action_apace=12).to('cpu')
         self.actor.load_state_dict(torch.load("nn/model_2026-07-02_15-22-23.pt", map_location=torch.device("cpu")))
@@ -141,6 +145,12 @@ class Policy:
                 self.actor.obs_rms(obs, update=False),
             )
             actions = actions[0].numpy()
+
+        # observations_unsqueezed = np.expand_dims(input_data, axis=0).astype(np.float32)
+        # actions = ort_sess.run(
+        #     None, {input_name: obs}
+        # )[0][0]
+
         self.last_action = actions.copy()
         return actions
 
