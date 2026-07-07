@@ -263,23 +263,23 @@ class RobotController:
         # Policy control after standing up
         if self.percent_1 == 1 and self.percent_2 == 1 and self.percent_3 == 1 and self.sit_down == False and self.stand_up == False:
             actions = self.policy_module.infer_action(self.low_state)
-            des_pos = self.policy_module.default_joint_angles + 0.5 * actions
-            tau = self.Kp*(des_pos - np.array([m.q for m in self.low_state.motor_state[:12]])) - self.Kd* np.array([m.dq for m in self.low_state.motor_state[:12]])
-            tau = clip_torques_in_groups(tau)  
-            # for i in range(12):
-            #     m = self.low_cmd.motor_cmd[i]
-            #     m.q = des_pos[i]
-            #     m.dq = 0
-            #     m.kp = self.Kp
-            #     m.kd = self.Kd
-            #     m.tau = 0
+            des_pos = self.policy_module.default_joint_angles + 0.25 * actions
+            # tau = self.Kp*(des_pos - np.array([m.q for m in self.low_state.motor_state[:12]])) - self.Kd* np.array([m.dq for m in self.low_state.motor_state[:12]])
+            # tau = clip_torques_in_groups(tau)  
             for i in range(12):
                 m = self.low_cmd.motor_cmd[i]
-                m.q = 0
+                m.q = des_pos[i]
                 m.dq = 0
-                m.kp = 0
-                m.kd = 0
-                m.tau = tau
+                m.kp = self.Kp
+                m.kd = self.Kd
+                m.tau = 0
+            # for i in range(12):
+            #     m = self.low_cmd.motor_cmd[i]
+            #     m.q = 0
+            #     m.dq = 0
+            #     m.kp = 0
+            #     m.kd = 0
+            #     m.tau = tau
 
         self._sit_down_sequence()
 
