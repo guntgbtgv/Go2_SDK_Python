@@ -24,8 +24,8 @@ from config_loader.config_loader import load_config, load_actor_network, Agent
 # ---------------- Constants ----------------
 JOYSTICK_THRESHOLD = 0.05
 CONTROL_INTERVAL = 0.02  # 50 Hz
-DEFAULT_KP = 25.0
-DEFAULT_KD = 2.0
+DEFAULT_KP = 20.0
+DEFAULT_KD = 0.5
 
 # ---------------- Joystick Handler ----------------
 class JoystickHandler:
