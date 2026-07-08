@@ -96,7 +96,7 @@ class Policy:
 
         # self.actor_network = load_actor_network(config).to('cpu')
         self.actor = Agent(observation_space=45, action_apace=12).to('cpu')
-        self.actor.load_state_dict(torch.load("nn/model_2026-07-02_15-22-23.pt", map_location=torch.device("cpu")))
+        self.actor.load_state_dict(torch.load("nn/model_2026-07-08_00-11-08.pt", map_location=torch.device("cpu")))
         self.actor.eval()
         self.joystick = joystick
         self.last_action = np.zeros(12)
@@ -273,7 +273,7 @@ class RobotController:
         # Policy control after standing up
         if self.percent_1 == 1 and self.percent_2 == 1 and self.percent_3 == 1 and self.sit_down == False and self.stand_up == False:
             actions = self.policy_module.infer_action(self.low_state)
-            des_pos = self.policy_module.default_joint_angles + 0.25 * actions
+            des_pos = self.policy_module.default_joint_angles + 0.3 * actions
             # tau = self.Kp*(des_pos - np.array([m.q for m in self.low_state.motor_state[:12]])) - self.Kd* np.array([m.dq for m in self.low_state.motor_state[:12]])
             # tau = clip_torques_in_groups(tau)  
             for i in range(12):
