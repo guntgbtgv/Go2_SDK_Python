@@ -20,7 +20,7 @@ def scale_axis(index, value):
     elif index == 1:  # Axis 0 (Left Stick X)
         value *= -1
         if value > 0:
-            return value * 2.0  # Positive direction: [0, 1]
+            return value * 3.0  # Positive direction: [0, 1]
         else:
             return value * 0.0  # Negative direction: [0, -0.5]
     elif index == 2:  # Axis 3 (Right Trigger)

@@ -56,54 +56,76 @@ def layer_init(layer, std=np.sqrt(2), bias_const=0.0):
     torch.nn.init.constant_(layer.bias, bias_const)
     return layer
 
+# class Agent(nn.Module):
+#     def __init__(self, observation_space, action_apace):
+#         super().__init__()
+#         SINGLE_OBSERVATION_SPACE = observation_space
+#         SINGLE_ACTION_SPACE = action_apace
+#         self.critic = nn.Sequential(
+#             layer_init(nn.Linear(np.array(SINGLE_OBSERVATION_SPACE).prod(), 128)),
+#             nn.ELU(),
+#             layer_init(nn.Linear(128, 128)),
+#             nn.ELU(),
+#             layer_init(nn.Linear(128, 128)),
+#             nn.ELU(),
+#             layer_init(nn.Linear(128, 1), std=1.0),
+#         )
+#         self.actor_mean = nn.Sequential(
+#             layer_init(nn.Linear(np.array(SINGLE_OBSERVATION_SPACE).prod(), 128)),
+#             nn.ELU(),
+#             layer_init(nn.Linear(128, 128)),
+#             nn.ELU(),
+#             layer_init(nn.Linear(128, 128)),
+#             nn.ELU(),
+#             layer_init(nn.Linear(128, np.prod(SINGLE_ACTION_SPACE)), std=0.01),
+#         )
+#         self.actor_logstd = nn.Parameter(torch.zeros(1, np.prod(SINGLE_ACTION_SPACE)))
+
+#         self.obs_rms = RunningMeanStd(shape=SINGLE_OBSERVATION_SPACE)
+#         self.value_rms = RunningMeanStd(shape=())
+
+#     def get_value(self, x):
+#         return self.critic(x)
+
+#     def get_action_and_value(self, x, action=None, deterministic=False):
+#         action_mean = self.actor_mean(x)
+#         action_logstd = self.actor_logstd.expand_as(action_mean)
+#         action_std = torch.exp(action_logstd)
+#         probs = Normal(action_mean, action_std)
+#         if action is None:
+#             if not deterministic:
+#                 action = probs.sample()
+#             else:
+#                 action = action_mean
+#         return (
+#             action,
+#             probs.log_prob(action).sum(1),
+#             probs.entropy().sum(1),
+#             self.critic(x),
+#         )
+    
+#     def forward(self, x, deterministic=True):
+#         action, _, _, _ = self.get_action_and_value(self.obs_rms(x, update=False), deterministic=deterministic)
+#         return action
+
 class Agent(nn.Module):
     def __init__(self, observation_space, action_apace):
         super().__init__()
         SINGLE_OBSERVATION_SPACE = observation_space
         SINGLE_ACTION_SPACE = action_apace
-        self.critic = nn.Sequential(
+
+        self.net_container = nn.Sequential(
             layer_init(nn.Linear(np.array(SINGLE_OBSERVATION_SPACE).prod(), 128)),
             nn.ELU(),
             layer_init(nn.Linear(128, 128)),
             nn.ELU(),
             layer_init(nn.Linear(128, 128)),
             nn.ELU(),
-            layer_init(nn.Linear(128, 1), std=1.0),
         )
-        self.actor_mean = nn.Sequential(
-            layer_init(nn.Linear(np.array(SINGLE_OBSERVATION_SPACE).prod(), 128)),
-            nn.ELU(),
-            layer_init(nn.Linear(128, 128)),
-            nn.ELU(),
-            layer_init(nn.Linear(128, 128)),
-            nn.ELU(),
-            layer_init(nn.Linear(128, np.prod(SINGLE_ACTION_SPACE)), std=0.01),
-        )
-        self.actor_logstd = nn.Parameter(torch.zeros(1, np.prod(SINGLE_ACTION_SPACE)))
+        self.policy_layer = nn.Linear(128, np.prod(SINGLE_ACTION_SPACE))
+        self.value_layer = nn.Linear(128, 1)
+        self.log_std_parameter = nn.Parameter(torch.zeros(np.prod(SINGLE_ACTION_SPACE)))
 
-        self.obs_rms = RunningMeanStd(shape=SINGLE_OBSERVATION_SPACE)
-        self.value_rms = RunningMeanStd(shape=())
-
-    def get_value(self, x):
-        return self.critic(x)
-
-    def get_action_and_value(self, x, action=None, deterministic=False):
-        action_mean = self.actor_mean(x)
-        action_logstd = self.actor_logstd.expand_as(action_mean)
-        action_std = torch.exp(action_logstd)
-        probs = Normal(action_mean, action_std)
-        if action is None:
-            if not deterministic:
-                action = probs.sample()
-            else:
-                action = action_mean
-        return (
-            action,
-            probs.log_prob(action).sum(1),
-            probs.entropy().sum(1),
-            self.critic(x),
-        )
-    
-    def forward(self, x, deterministic=True):
-        action, _, _, _ = self.get_action_and_value(self.obs_rms(x, update=False), deterministic=deterministic)
-        return action
+    def forward(self, x):
+        x = self.net_container(x)
+        return self.policy_layer(x)

@@ -96,7 +96,7 @@ class Policy:
 
         # self.actor_network = load_actor_network(config).to('cpu')
         self.actor = Agent(observation_space=45, action_apace=12).to('cpu')
-        self.actor.load_state_dict(torch.load("nn/model_2026-07-08_00-11-08.pt", map_location=torch.device("cpu")))
+        self.actor.load_state_dict(torch.load("nn/model_2026-07-12_2.pt", map_location=torch.device("cpu")))
         self.actor.eval()
         self.joystick = joystick
         self.last_action = np.zeros(12)
@@ -141,9 +141,10 @@ class Policy:
         obs = self.compute_observation(state)
         with torch.no_grad():
             # actions = self.actor_network(obs).numpy()[0]
-            actions, _, _, _ = self.actor.get_action_and_value(
-                self.actor.obs_rms(obs, update=False),
-            )
+            actions = actor(obs)
+            # actions, _, _, _ = self.actor.get_action_and_value(
+            #     self.actor.obs_rms(obs, update=False),
+            # )
             actions = actions[0].numpy()
 
         # observations_unsqueezed = np.expand_dims(input_data, axis=0).astype(np.float32)
