@@ -48,7 +48,7 @@ class JoystickHandler:
             if event.type == pygame.QUIT:
                 return fallback
 
-        axes = [self.joystick.get_axis(i) for i in [0, 1, 2, 5]]
+        axes = [self.joystick.get_axis(i) for i in [2, 1, 5, 4]]
         summed_axes = (1 + axes[2]) - (1 + axes[3])
         axes = np.array([axes[0], axes[1], summed_axes])
 
@@ -96,7 +96,7 @@ class Policy:
 
         # self.actor_network = load_actor_network(config).to('cpu')
         self.actor = Agent(observation_space=45, action_apace=12).to('cpu')
-        self.actor.load_state_dict(torch.load("nn/model_2026-07-12_2.pt", map_location=torch.device("cpu")))
+        self.actor.load_state_dict(torch.load("nn/model_2026-07-20.pt", map_location=torch.device("cpu")))
         self.actor.eval()
         self.joystick = joystick
         self.last_action = np.zeros(12)
