@@ -26,6 +26,9 @@ JOYSTICK_THRESHOLD = 0.05
 CONTROL_INTERVAL = 0.02  # 50 Hz
 DEFAULT_KP = 20.0
 DEFAULT_KD = 0.5
+LOGGING = True
+MAX_SECONDS = 600
+MAX_SAMPLES = int(MAX_SECONDS / CONTROL_INTERVAL)
 
 # ---------------- Joystick Handler ----------------
 class JoystickHandler:
@@ -141,7 +144,7 @@ class Policy:
         obs = self.compute_observation(state)
         with torch.no_grad():
             # actions = self.actor_network(obs).numpy()[0]
-            actions = actor(obs)
+            actions = self.actor(obs)
             # actions, _, _, _ = self.actor.get_action_and_value(
             #     self.actor.obs_rms(obs, update=False),
             # )
@@ -160,7 +163,7 @@ class Policy:
 def check_safety_stops(state: LowState_, joystick: JoystickHandler) -> bool:
     body_quat = state.imu_state.quaternion
     inclination = 2 * np.arcsin(np.sqrt(body_quat[1]**2 + body_quat[2]**2))
-    return inclination > np.pi / 8 or joystick.safety_button_pressed()
+    return inclination > np.pi / 4 or joystick.safety_button_pressed()
 
 
 def joint_linear_interpolation(init_pos, target_pos, rate):
@@ -202,6 +205,10 @@ class RobotController:
         self.duration_3 = 100
         self.duration_4 = 150
         self.first_run = True
+
+        self.log_data = np.zeros((MAX_SAMPLES, 1 + 12 * 3 + 3 + 3), dtype=np.float32)
+        self.log_index = 0
+        self.log_start_time = time.monotonic()
 
     # ---------------- Initialization ----------------
     def init(self):
@@ -298,6 +305,9 @@ class RobotController:
         self.low_cmd.crc = self.crc.Crc(self.low_cmd)
         self.lowcmd_publisher.Write(self.low_cmd)
 
+        if LOGGING:
+            self._record_joint_state()
+
     # ---------------- Stand up sequence ----------------
     def _stand_up_sequence(self):
         print("Standing up sequence in progress...")
@@ -336,6 +346,88 @@ class RobotController:
                 self.low_cmd.motor_cmd[i].kd = 5.0
                 self.low_cmd.motor_cmd[i].tau = 0
 
+    def _record_joint_state(self):
+        if self.low_state is None:
+            return
+
+        if self.log_index >= len(self.log_data):
+            return
+
+        row = self.log_index
+
+        # Time
+        self.log_data[row, 0] = time.monotonic() - self.log_start_time
+
+        # Joint states
+        for joint in range(12):
+            motor = self.low_state.motor_state[joint]
+            offset = 1 + joint * 3
+
+            self.log_data[row, offset] = motor.q
+            self.log_data[row, offset + 1] = motor.dq
+            self.log_data[row, offset + 2] = motor.tau_est
+
+        # Joystick motion command
+        command_offset = 1 + 12 * 3
+
+        if self.joystick is not None:
+            command = np.asarray(
+                self.joystick.get_commands(),
+                dtype=np.float32,
+            )
+            self.log_data[
+                row,
+                command_offset:command_offset + 3
+            ] = command[:3]
+
+        # IMU linear acceleration
+        imu_offset = command_offset + 3
+
+        acceleration = np.asarray(
+            self.low_state.imu_state.accelerometer,
+            dtype=np.float32,
+        )
+
+        self.log_data[
+            row,
+            imu_offset:imu_offset + 3
+        ] = acceleration[:3]
+
+        self.log_index += 1
+
+    def save_log(self, filename="joint_log.csv"):
+        valid_data = self.log_data[:self.log_index]
+
+        header = ["time_s"]
+
+        for i in range(12):
+            header.extend([
+                f"q{i}",
+                f"qdot{i}",
+                f"tau{i}",
+            ])
+
+        header.extend([
+            "command_0",
+            "command_1",
+            "command_2",
+            "imu_accel_x",
+            "imu_accel_y",
+            "imu_accel_z",
+        ])
+
+        np.savetxt(
+            filename,
+            valid_data,
+            delimiter=",",
+            header=",".join(header),
+            comments="",
+        )
+
+        print(
+            f"Saved {self.log_index} samples "
+            f"to {filename}"
+        )
 
 # ---------------- Main ----------------
 if __name__ == '__main__':
@@ -352,5 +444,9 @@ if __name__ == '__main__':
         while True:
             time.sleep(1)
     except KeyboardInterrupt:
-        print("Exiting...")
+        print("Stopping controller...")
+
+    finally:
+        controller.save_log("joint_log.csv")
+        print("Exiting.")
         sys.exit(0)

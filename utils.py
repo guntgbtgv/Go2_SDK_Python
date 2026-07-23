@@ -16,13 +16,13 @@ def quat_rotate_inverse(q, v):
 # Function to scale axis values - Joystick 1
 def scale_axis(index, value):
     if index == 0:  # Axis 1 (Left Stick Y) -- Flip the sign
-        return -value * 1.0  # Flip the sign and map to [-0.5, 0.5]
+        return -value * 0.5  # Flip the sign and map to [-0.5, 0.5]
     elif index == 1:  # Axis 0 (Left Stick X)
         value *= -1
         if value > 0:
-            return value * 3.0  # Positive direction: [0, 1]
+            return value * 2.5  # Positive direction: [0, 1]
         else:
-            return value * 0.0  # Negative direction: [0, -0.5]
+            return value * 1.0  # Negative direction: [0, -0.5]
     elif index == 2:  # Axis 3 (Right Trigger)
         return value * 0.25 #/ 2  # Symmetric between [-0.5, 0.5]
     else:
