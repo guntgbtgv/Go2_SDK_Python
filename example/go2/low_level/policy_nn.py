@@ -447,6 +447,10 @@ if __name__ == '__main__':
         print("Stopping controller...")
 
     finally:
-        controller.save_log("joint_log.csv")
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"joint_log_{timestamp}.csv"
+
+        controller.save_log(filename)
+        print(f"Log saved to {filename}")
         print("Exiting.")
         sys.exit(0)
