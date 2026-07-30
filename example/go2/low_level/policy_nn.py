@@ -7,6 +7,7 @@ import numpy as np
 import torch
 import pygame
 # import onnxruntime as ort
+from datetime import datetime
 
 from unitree_sdk2py.core.channel import ChannelPublisher, ChannelFactoryInitialize, ChannelSubscriber
 from unitree_sdk2py.idl.unitree_go.msg.dds_ import LowCmd_, LowState_
@@ -99,7 +100,7 @@ class Policy:
 
         # self.actor_network = load_actor_network(config).to('cpu')
         self.actor = Agent(observation_space=45, action_apace=12).to('cpu')
-        self.actor.load_state_dict(torch.load("nn/model_2026-07-20.pt", map_location=torch.device("cpu")))
+        self.actor.load_state_dict(torch.load("nn/model_2026-07-29_0007.pt", map_location=torch.device("cpu")))
         self.actor.eval()
         self.joystick = joystick
         self.last_action = np.zeros(12)
@@ -448,7 +449,7 @@ if __name__ == '__main__':
 
     finally:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"joint_log_{timestamp}.csv"
+        filename = os.path.join("logs", f"joint_log_{timestamp}.csv")
 
         controller.save_log(filename)
         print(f"Log saved to {filename}")
