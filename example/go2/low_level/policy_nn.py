@@ -207,7 +207,7 @@ class RobotController:
         self.duration_4 = 150
         self.first_run = True
 
-        self.log_data = np.zeros((MAX_SAMPLES, 1 + 12 * 3 + 3 + 3), dtype=np.float32)
+        self.log_data = np.zeros((MAX_SAMPLES, 1 + 12 * 3 + 3 + 4), dtype=np.float32)
         self.log_index = 0
         self.log_start_time = time.monotonic()
 
@@ -267,6 +267,7 @@ class RobotController:
 
         if check_safety_stops(self.low_state, self.joystick):
             print("Safety condition triggered. Stopping robot.")
+            self.save_log()            
             os._exit(1)
 
         if self.joystick.sit_down_button_pressed() and self.percent_3 == 1.0:
@@ -384,19 +385,23 @@ class RobotController:
         # IMU linear acceleration
         imu_offset = command_offset + 3
 
-        acceleration = np.asarray(
-            self.low_state.imu_state.accelerometer,
+        quaternion = np.asarray(
+            self.low_state.imu_state.quaternion,
             dtype=np.float32,
         )
 
         self.log_data[
             row,
-            imu_offset:imu_offset + 3
-        ] = acceleration[:3]
+            imu_offset:imu_offset + 4
+        ] = quaternion[:4]
 
         self.log_index += 1
 
     def save_log(self, filename="joint_log.csv"):
+
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = os.path.join("logs", f"joint_log_{timestamp}.csv")
+
         valid_data = self.log_data[:self.log_index]
 
         header = ["time_s"]
@@ -412,9 +417,10 @@ class RobotController:
             "command_0",
             "command_1",
             "command_2",
-            "imu_accel_x",
-            "imu_accel_y",
-            "imu_accel_z",
+            "imu_quat_w",
+            "imu_quat_x",
+            "imu_quat_y",
+            "imu_quat_z",
         ])
 
         np.savetxt(
@@ -448,9 +454,6 @@ if __name__ == '__main__':
         print("Stopping controller...")
 
     finally:
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = os.path.join("logs", f"joint_log_{timestamp}.csv")
-
         controller.save_log(filename)
         print(f"Log saved to {filename}")
         print("Exiting.")
