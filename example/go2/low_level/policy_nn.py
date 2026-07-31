@@ -110,14 +110,15 @@ class Policy:
         self.timestep = 0.0
 
 
-    def compute_observation(self, state: LowState_):
+    def compute_observation(self, state: LowState_, quat_filtered):
         commands = self.joystick.get_commands() if self.joystick else np.zeros(3)
-        body_quat = np.array([
-            state.imu_state.quaternion[1],
-            state.imu_state.quaternion[2],
-            state.imu_state.quaternion[3],
-            state.imu_state.quaternion[0]
-        ])
+        # body_quat = np.array([
+        #     state.imu_state.quaternion[1],
+        #     state.imu_state.quaternion[2],
+        #     state.imu_state.quaternion[3],
+        #     state.imu_state.quaternion[0]
+        # ])
+        body_quat = quat_filtered
         body_vel = np.array(state.imu_state.gyroscope[:3])
         joint_angles = np.array([m.q for m in state.motor_state[:12]])
         joint_velocities = np.array([m.dq for m in state.motor_state[:12]])
@@ -142,8 +143,8 @@ class Policy:
         obs = torch.tensor(obs, dtype=torch.float32).unsqueeze(0)
         return obs
 
-    def infer_action(self, state: LowState_):
-        obs = self.compute_observation(state)
+    def infer_action(self, state: LowState_, quat_filtered):
+        obs = self.compute_observation(state, quat_filtered)
         with torch.no_grad():
             # actions = self.actor_network(obs).numpy()[0]
             actions = self.actor(obs)
@@ -220,7 +221,7 @@ class RobotController:
             dtype=np.float64,
         )
 
-        self.log_data = np.zeros((MAX_SAMPLES, 1 + 12 * 3 + 3 + 4), dtype=np.float32)
+        self.log_data = np.zeros((MAX_SAMPLES, 1 + 12 * 3 + 3 + 4 + 4), dtype=np.float32)
         self.log_index = 0
         self.log_start_time = time.monotonic()
 
@@ -308,7 +309,7 @@ class RobotController:
 
         # Policy control after standing up
         if self.percent_1 == 1 and self.percent_2 == 1 and self.percent_3 == 1 and self.sit_down == False and self.stand_up == False:
-            actions = self.policy_module.infer_action(self.low_state)
+            actions = self.policy_module.infer_action(self.low_state, self.estimated_quaternion)
             des_pos = self.policy_module.default_joint_angles + 0.3 * actions
             # tau = self.Kp*(des_pos - np.array([m.q for m in self.low_state.motor_state[:12]])) - self.Kd* np.array([m.dq for m in self.low_state.motor_state[:12]])
             # tau = clip_torques_in_groups(tau)  
@@ -421,6 +422,11 @@ class RobotController:
             imu_offset:imu_offset + 4
         ] = quaternion[:4]
 
+        self.log_data[
+            row,
+            imu_offset+4:imu_offset + 8
+        ] = self.estimated_quaternion[:4]
+
         self.log_index += 1
 
     def save_log(self, filename="joint_log.csv"):
@@ -447,6 +453,10 @@ class RobotController:
             "imu_quat_x",
             "imu_quat_y",
             "imu_quat_z",
+            "filtered_quat_w",
+            "filtered_quat_x",
+            "filtered_quat_y",
+            "filtered_quat_z",
         ])
 
         np.savetxt(
