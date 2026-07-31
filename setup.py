@@ -7,7 +7,7 @@ setup(name='unitree_sdk2py',
       long_description=open('README.md').read(),
       long_description_content_type="text/markdown",
       license="BSD-3-Clause",
-      py_modules=["utils"],
+      py_modules=["utils","complementary_filter"],
       packages=find_packages(include=['unitree_sdk2py','unitree_sdk2py.*','config_loader','config_loader.*']),
       description='Unitree robot sdk version 2 for python',
       project_urls={

@@ -20,7 +20,7 @@ from unitree_sdk2py.comm.motion_switcher.motion_switcher_client import MotionSwi
 
 from utils import scale_axis, quat_rotate_inverse, clip_torques_in_groups
 from config_loader.config_loader import load_config, load_actor_network, Agent
-
+from complementary_filter import ComplementaryFilter
 
 # ---------------- Constants ----------------
 JOYSTICK_THRESHOLD = 0.05
@@ -30,6 +30,7 @@ DEFAULT_KD = 0.5
 LOGGING = True
 MAX_SECONDS = 600
 MAX_SAMPLES = int(MAX_SECONDS / CONTROL_INTERVAL)
+DEFAULT_LOWSTATE_DT = 0.002
 
 # ---------------- Joystick Handler ----------------
 class JoystickHandler:
@@ -207,6 +208,18 @@ class RobotController:
         self.duration_4 = 150
         self.first_run = True
 
+        self.orientation_filter = ComplementaryFilter(
+            gain_acc=0.005,
+            bias_alpha=0.01,
+            do_bias_estimation=True,
+            do_adaptive_gain=True,
+        )
+        self.orientation_filter.initialized=True
+        self.estimated_quaternion = np.array(
+            [1.0, 0.0, 0.0, 0.0],
+            dtype=np.float64,
+        )
+
         self.log_data = np.zeros((MAX_SAMPLES, 1 + 12 * 3 + 3 + 4), dtype=np.float32)
         self.log_index = 0
         self.log_start_time = time.monotonic()
@@ -252,6 +265,19 @@ class RobotController:
     def _lowstate_callback(self, msg: LowState_):
         self.low_state = msg
 
+        acceleration = np.asarray(
+            self.low_state.imu_state.accelerometer[:3],
+            dtype=np.float64,
+        )
+        angular_velocity = np.asarray(
+            self.low_state.imu_state.gyroscope[:3],
+            dtype=np.float64,
+        )
+        self.estimated_quaternion = self.orientation_filter.update(
+            acceleration=acceleration,
+            angular_velocity=angular_velocity,
+            dt=DEFAULT_LOWSTATE_DT,
+        )
     # ---------------- Command loop ----------------
     def _lowcmd_write(self):
         if self.low_state is None:
