@@ -225,6 +225,15 @@ class RobotController:
         self.log_index = 0
         self.log_start_time = time.monotonic()
 
+
+        self.lowstate_frequency = None
+        self.lowstate_dt = None
+
+        self._lowstate_rate_start = None
+        self._lowstate_rate_count = 0
+
+        self._lowstate_rate_measurement_samples = 500        
+
     # ---------------- Initialization ----------------
     def init(self):
         # Initialize LowCmd
@@ -266,6 +275,8 @@ class RobotController:
     def _lowstate_callback(self, msg: LowState_):
         self.low_state = msg
 
+        self._update_lowstate_frequency()
+
         acceleration = np.asarray(
             self.low_state.imu_state.accelerometer[:3],
             dtype=np.float64,
@@ -279,6 +290,52 @@ class RobotController:
             angular_velocity=angular_velocity,
             dt=DEFAULT_LOWSTATE_DT,
         )
+
+    def _update_lowstate_frequency(self):
+        now = time.monotonic()
+
+        if self._lowstate_rate_start is None:
+            self._lowstate_rate_start = now
+            self._lowstate_rate_count = 0
+            return
+
+        self._lowstate_rate_count += 1
+
+        if (
+            self._lowstate_rate_count
+            < self._lowstate_rate_measurement_samples
+        ):
+            return
+
+        elapsed = now - self._lowstate_rate_start
+
+        if elapsed > 0.0:
+            measured_frequency = (
+                self._lowstate_rate_count / elapsed
+            )
+
+            # Optional smoothing to prevent abrupt dt changes.
+            if self.lowstate_frequency is None:
+                self.lowstate_frequency = measured_frequency
+            else:
+                smoothing = 0.1
+                self.lowstate_frequency = (
+                    (1.0 - smoothing)
+                    * self.lowstate_frequency
+                    + smoothing
+                    * measured_frequency
+                )
+
+            self.lowstate_dt = 1.0 / self.lowstate_frequency
+
+            print(
+                f"LowState: {self.lowstate_frequency:.2f} Hz, "
+                f"dt={self.lowstate_dt:.6f} s"
+            )
+
+        self._lowstate_rate_start = now
+        self._lowstate_rate_count = 0
+
     # ---------------- Command loop ----------------
     def _lowcmd_write(self):
         if self.low_state is None:
