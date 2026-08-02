@@ -486,7 +486,7 @@ class RobotController:
 
         self.log_index += 1
 
-    def save_log(self, filename="joint_log.csv"):
+    def save_log(self):
 
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         filename = os.path.join("logs", f"joint_log_{timestamp}.csv")
@@ -547,7 +547,6 @@ if __name__ == '__main__':
         print("Stopping controller...")
 
     finally:
-        controller.save_log(filename)
-        print(f"Log saved to {filename}")
+        controller.save_log()
         print("Exiting.")
         sys.exit(0)
