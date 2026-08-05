@@ -101,7 +101,7 @@ class Policy:
 
         # self.actor_network = load_actor_network(config).to('cpu')
         self.actor = Agent(observation_space=45, action_apace=12).to('cpu')
-        self.actor.load_state_dict(torch.load("nn/model_2026-07-29_0007.pt", map_location=torch.device("cpu")))
+        self.actor.load_state_dict(torch.load("nn/model_2026-08-05_accelerometer.pt", map_location=torch.device("cpu")))
         self.actor.eval()
         self.joystick = joystick
         self.last_action = np.zeros(12)
@@ -112,14 +112,15 @@ class Policy:
 
     def compute_observation(self, state: LowState_, quat_filtered):
         commands = self.joystick.get_commands() if self.joystick else np.zeros(3)
-        # body_quat = np.array([
-        #     state.imu_state.quaternion[1],
-        #     state.imu_state.quaternion[2],
-        #     state.imu_state.quaternion[3],
-        #     state.imu_state.quaternion[0]
-        # ])
-        body_quat = quat_filtered
+        body_quat = np.array([
+            state.imu_state.quaternion[1],
+            state.imu_state.quaternion[2],
+            state.imu_state.quaternion[3],
+            state.imu_state.quaternion[0]
+        ])
+        # body_quat = quat_filtered
         body_vel = np.array(state.imu_state.gyroscope[:3])
+        bady_acc = np.array(state.imu_state.accelerometer[:3])
         joint_angles = np.array([m.q for m in state.motor_state[:12]])
         joint_velocities = np.array([m.dq for m in state.motor_state[:12]])
 
@@ -133,6 +134,7 @@ class Policy:
 
         obs = np.concatenate((
             body_vel,
+            bady_acc,
             commands,
             gravity_body,
             joint_angles,
@@ -221,18 +223,18 @@ class RobotController:
             dtype=np.float64,
         )
 
-        self.log_data = np.zeros((MAX_SAMPLES, 1 + 12 * 3 + 3 + 4 + 4), dtype=np.float32)
+        self.log_data = np.zeros((MAX_SAMPLES, 1 + 12 * 3 + 3 + 4), dtype=np.float32)
         self.log_index = 0
         self.log_start_time = time.monotonic()
 
 
-        self.lowstate_frequency = None
-        self.lowstate_dt = None
+        # self.lowstate_frequency = None
+        # self.lowstate_dt = None
 
-        self._lowstate_rate_start = None
-        self._lowstate_rate_count = 0
+        # self._lowstate_rate_start = None
+        # self._lowstate_rate_count = 0
 
-        self._lowstate_rate_measurement_samples = 500        
+        # self._lowstate_rate_measurement_samples = 500        
 
     # ---------------- Initialization ----------------
     def init(self):
@@ -275,66 +277,66 @@ class RobotController:
     def _lowstate_callback(self, msg: LowState_):
         self.low_state = msg
 
-        self._update_lowstate_frequency()
+        # self._update_lowstate_frequency()
 
-        acceleration = np.asarray(
-            self.low_state.imu_state.accelerometer[:3],
-            dtype=np.float64,
-        )
-        angular_velocity = np.asarray(
-            self.low_state.imu_state.gyroscope[:3],
-            dtype=np.float64,
-        )
-        self.estimated_quaternion = self.orientation_filter.update(
-            acceleration=acceleration,
-            angular_velocity=angular_velocity,
-            dt=DEFAULT_LOWSTATE_DT,
-        )
+        # acceleration = np.asarray(
+        #     self.low_state.imu_state.accelerometer[:3],
+        #     dtype=np.float64,
+        # )
+        # angular_velocity = np.asarray(
+        #     self.low_state.imu_state.gyroscope[:3],
+        #     dtype=np.float64,
+        # )
+        # self.estimated_quaternion = self.orientation_filter.update(
+        #     acceleration=acceleration,
+        #     angular_velocity=angular_velocity,
+        #     dt=DEFAULT_LOWSTATE_DT,
+        # )
 
-    def _update_lowstate_frequency(self):
-        now = time.monotonic()
+    # def _update_lowstate_frequency(self):
+    #     now = time.monotonic()
 
-        if self._lowstate_rate_start is None:
-            self._lowstate_rate_start = now
-            self._lowstate_rate_count = 0
-            return
+    #     if self._lowstate_rate_start is None:
+    #         self._lowstate_rate_start = now
+    #         self._lowstate_rate_count = 0
+    #         return
 
-        self._lowstate_rate_count += 1
+    #     self._lowstate_rate_count += 1
 
-        if (
-            self._lowstate_rate_count
-            < self._lowstate_rate_measurement_samples
-        ):
-            return
+    #     if (
+    #         self._lowstate_rate_count
+    #         < self._lowstate_rate_measurement_samples
+    #     ):
+    #         return
 
-        elapsed = now - self._lowstate_rate_start
+    #     elapsed = now - self._lowstate_rate_start
 
-        if elapsed > 0.0:
-            measured_frequency = (
-                self._lowstate_rate_count / elapsed
-            )
+    #     if elapsed > 0.0:
+    #         measured_frequency = (
+    #             self._lowstate_rate_count / elapsed
+    #         )
 
-            # Optional smoothing to prevent abrupt dt changes.
-            if self.lowstate_frequency is None:
-                self.lowstate_frequency = measured_frequency
-            else:
-                smoothing = 0.1
-                self.lowstate_frequency = (
-                    (1.0 - smoothing)
-                    * self.lowstate_frequency
-                    + smoothing
-                    * measured_frequency
-                )
+    #         # Optional smoothing to prevent abrupt dt changes.
+    #         if self.lowstate_frequency is None:
+    #             self.lowstate_frequency = measured_frequency
+    #         else:
+    #             smoothing = 0.1
+    #             self.lowstate_frequency = (
+    #                 (1.0 - smoothing)
+    #                 * self.lowstate_frequency
+    #                 + smoothing
+    #                 * measured_frequency
+    #             )
 
-            self.lowstate_dt = 1.0 / self.lowstate_frequency
+    #         self.lowstate_dt = 1.0 / self.lowstate_frequency
 
-            print(
-                f"LowState: {self.lowstate_frequency:.2f} Hz, "
-                f"dt={self.lowstate_dt:.6f} s"
-            )
+    #         print(
+    #             f"LowState: {self.lowstate_frequency:.2f} Hz, "
+    #             f"dt={self.lowstate_dt:.6f} s"
+    #         )
 
-        self._lowstate_rate_start = now
-        self._lowstate_rate_count = 0
+    #     self._lowstate_rate_start = now
+    #     self._lowstate_rate_count = 0
 
     # ---------------- Command loop ----------------
     def _lowcmd_write(self):
@@ -479,10 +481,10 @@ class RobotController:
             imu_offset:imu_offset + 4
         ] = quaternion[:4]
 
-        self.log_data[
-            row,
-            imu_offset+4:imu_offset + 8
-        ] = self.estimated_quaternion[:4]
+        # self.log_data[
+        #     row,
+        #     imu_offset+4:imu_offset + 8
+        # ] = self.estimated_quaternion[:4]
 
         self.log_index += 1
 
@@ -510,10 +512,10 @@ class RobotController:
             "imu_quat_x",
             "imu_quat_y",
             "imu_quat_z",
-            "filtered_quat_w",
-            "filtered_quat_x",
-            "filtered_quat_y",
-            "filtered_quat_z",
+            # "filtered_quat_w",
+            # "filtered_quat_x",
+            # "filtered_quat_y",
+            # "filtered_quat_z",
         ])
 
         np.savetxt(
