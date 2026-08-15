@@ -113,18 +113,17 @@ class Policy:
     def compute_observation(self, state: LowState_, quat_filtered):
         commands = self.joystick.get_commands() if self.joystick else np.zeros(3)
         body_quat = np.array([
+            state.imu_state.quaternion[0],
             state.imu_state.quaternion[1],
             state.imu_state.quaternion[2],
             state.imu_state.quaternion[3],
-            state.imu_state.quaternion[0]
         ])
-        # body_quat = quat_filtered
         body_vel = np.array(state.imu_state.gyroscope[:3])
         bady_acc = np.array(state.imu_state.accelerometer[:3])
         joint_angles = np.array([m.q for m in state.motor_state[:12]])
         joint_velocities = np.array([m.dq for m in state.motor_state[:12]])
 
-        gravity_body = quat_rotate_inverse(
+        gravity_body = quat_apply_inverse(
             torch.tensor(body_quat, dtype=torch.float32).unsqueeze(0),
             torch.tensor([[0.0, 0.0, -1.0]], dtype=torch.float32)
         ).squeeze().numpy()
